@@ -44,10 +44,37 @@ This file is downloadable from http://crca.ucsd.edu/~msp
 #pragma warning (disable: 4305 4244)
 #endif
 
-
+#ifdef __linux__
+#define flog log
+#define fexp exp
+#define fsqrt sqrt
+#endif
 
 char fiddle_version[] = "fiddle~ v1.2 -- 64 bit version by vb, 2015";
 
+#ifdef FTS1X
+#include "mess.h"
+#include "dsp.h"
+
+#define CLASSNAME "fiddle"
+
+#define OUTLETpower 5
+#define OUTLETmicropitch1 4
+#define OUTLETmicropitch2 3
+#define OUTLETmicropitch3 2
+#define OUTLETattack 1
+#define OUTLETpitch 0
+
+static fts_symbol_t *dsp_symbol = 0;
+
+#endif /* FTS */
+
+#ifdef MAX26
+#define t_floatarg double
+#include "m_extern.h"
+#include "d_graph.h"
+#include "d_ugen.h"
+#endif /* MAX26 */
 
 #ifdef PD
 #include "m_pd.h"
@@ -65,6 +92,8 @@ char fiddle_version[] = "fiddle~ v1.2 -- 64 bit version by vb, 2015";
 #include "ext_obex.h"
 #include "z_dsp.h"
 #include "fft_mayer.proto.h"
+
+
 
 
 
@@ -200,12 +229,25 @@ typedef struct pitchhist	    /* struct for keeping history by pitch */
 
 typedef struct sigfiddle		    /* instance struct */
 {
-
+#ifdef FTS1X
+    fts_object_t x_h;		    /* object header */
+    fts_alarm_t x_clock;    	    /* callback for timeouts */
+#endif
+#ifdef MAX26
+    t_head x_h;			    /* header for tilde objects */
+    t_sig *x_io[IN1+OUT0];	    /* number of signal inputs and outputs */
+    void *x_clock;		    /* a "clock" object */
+#endif
+#ifdef PD
+    t_object x_ob;		    /* object header */
+    t_clock *x_clock;    	    /* callback for timeouts */
+#endif
 #ifdef MSP
 	t_pxobject x_obj;
 	void *x_clock;
 	long x_downsample;		// downsample feature because of MSP's large sig vector sizes
 #endif
+	
     float *x_inbuf;		    /* buffer to analyze, npoints/2 elems */
     float *x_lastanalysis;	    /* FT of last buffer (see main comment) */
     float *x_spiral;		    /* 1/4-wave complex exponential */
@@ -1089,14 +1131,459 @@ int sigfiddle_doinit(t_sigfiddle *x, long npoints, long npitch,
     return (1);
 }
 
+/* formalities for FTS1.X */
+
+#ifdef FTS1X
+
+void sigfiddle_debug13(fts_object_t *o, int winlet, fts_symbol_t *s, int ac, const fts_atom_t *at)
+{
+	t_sigfiddle *x = (t_sigfiddle *)o;
+	sigfiddle_debug(x);
+}
+
+void sigfiddle_print13(fts_object_t *o, int winlet, fts_symbol_t *s, int ac, const fts_atom_t *at)
+{
+	t_sigfiddle *x = (t_sigfiddle *)o;
+	sigfiddle_print(x);
+}
+
+void sigfiddle_amprange13(fts_object_t *o, int winlet, fts_symbol_t *s,
+						  int ac, const fts_atom_t *at)
+{
+    t_sigfiddle *x = (t_sigfiddle *)o;
+    float lo =  (float) fts_get_float_long_arg(at, ac, 0, 0);
+    float hi =  (float) fts_get_float_long_arg(at, ac, 1, 0);
+    sigfiddle_amprange(x, lo, hi);
+}
+
+void sigfiddle_reattack13(fts_object_t *o, int winlet, fts_symbol_t *s,
+						  int ac, const fts_atom_t *at)
+{
+    t_sigfiddle *x = (t_sigfiddle *)o;
+    long msec =  fts_get_float_long_arg(at, ac, 0, 0);
+    float db =  (float) fts_get_float_long_arg(at, ac, 1, 0);
+    sigfiddle_reattack(x, msec, db);
+}
+
+void sigfiddle_vibrato13(fts_object_t *o, int winlet, fts_symbol_t *s,
+						 int ac, const fts_atom_t *at)
+{
+    t_sigfiddle *x = (t_sigfiddle *)o;
+    long msec =  fts_get_float_long_arg(at, ac, 0, 0);
+    float halftones =  (float) fts_get_float_long_arg(at, ac, 1, 0);
+    sigfiddle_vibrato(x, msec, halftones);
+}
+
+void sigfiddle_npartial13(fts_object_t *o, int winlet, fts_symbol_t *s,
+						  int ac, const fts_atom_t *at)
+{
+    t_sigfiddle *x = (t_sigfiddle *)o;
+    float npartial =  (float) fts_get_float_long_arg(at, ac, 0, 0);
+    sigfiddle_npartial(x, npartial);
+}
 
 
-#pragma mark MaxMSP glue ----------------------------
-/************* Beginning of MSP Code ******************************/
+void ftl_sigfiddle(fts_word_t *a)
+{
+    t_sigfiddle *x = (t_sigfiddle *)fts_word_get_obj(a);
+    float *in = (float *)fts_word_get_obj(a + 1);
+    long n_tick = fts_word_get_long(a + 2);
+	
+    int count;
+    float *fp,  *fp2;
+    for (count = 0, fp = x->x_inbuf + x->x_phase;
+		 count < n_tick; count++) *fp++ = *in++;
+    if (fp == x->x_inbuf + x->x_hop)
+    {
+		sigfiddle_doit(x);
+		x->x_phase = 0;
+        fts_alarm_set_delay(&x->x_clock, 0L);        /* output bang */
+        fts_alarm_arm(&x->x_clock);
+		
+		if (x->x_nprint) x->x_nprint--;
+    }
+    else x->x_phase += n_tick;
+}
+
+void sigfiddle_put(fts_object_t *o, int winlet, fts_symbol_t *s, int ac, const fts_atom_t *at)
+{
+    t_sigfiddle *x = (t_sigfiddle *)o;
+    fts_dsp_descr_t *dsp = (fts_dsp_descr_t *)fts_get_obj_arg(at, ac, 0, 0);
+    fts_atom_t a[3];
+	
+    x->x_sr = fts_dsp_get_input_srate(dsp, 0);
+    sigfiddle_reattack(x, x->x_attacktime, x->x_attackthresh);
+    sigfiddle_vibrato(x, x->x_vibtime, x->x_vibdepth);
+	
+    fts_set_obj(a, x);
+    fts_set_symbol(a+1, fts_dsp_get_input_name(dsp, 0));
+    fts_set_long(a+2, fts_dsp_get_input_size(dsp, 0));
+    dsp_add_funcall(dsp_symbol, 3, a);
+}
+
+void sigfiddle_tick(fts_alarm_t *alarm, void *p)
+{
+    fts_object_t *o = (fts_object_t *)p;
+    t_sigfiddle *x = (t_sigfiddle *)p;
+	
+    int i;
+    t_pitchhist *ph;
+    fts_outlet_float(o, OUTLETpower, x->x_dbs[x->x_histphase]);
+    for (i = 0,  ph = x->x_hist; i < x->x_npitch; i++,  ph++)
+    {
+		fts_atom_t at[2];
+		fts_set_float(at, ph->h_pitches[x->x_histphase]);
+		fts_set_float(at+1, ph->h_amps[x->x_histphase]);
+		fts_outlet_list(o, OUTLETmicropitch3 - i, 2, at);
+    }
+    if (x->x_attackvalue) fts_outlet_bang(o, OUTLETattack);
+    for (i = 0,  ph = x->x_hist; i < x->x_npitch; i++,  ph++)
+		if (ph->h_pitch) fts_outlet_float(o, OUTLETpitch, ph->h_pitch);
+}
+
+static void sigfiddle_delete(fts_object_t *o, int winlet, fts_symbol_t *s, int ac,
+							 const fts_atom_t *at)
+{
+	t_sigfiddle *x = (t_sigfiddle *)o;
+	
+	fts_free(x->x_inbuf);
+	fts_free(x->x_lastanalysis);
+	fts_free(x->x_spiral);
+	dsp_list_remove(o);
+}
+
+static void sigfiddle_init(fts_object_t *o, int winlet, fts_symbol_t *s, int ac, const fts_atom_t *at)
+{
+    t_sigfiddle *x = (t_sigfiddle *)o;
+    float *buf1, *buf2,  *buf3;
+    int i, hop;
+    long npoints    = fts_get_long_arg(at, ac, 1, 0);
+    long npitch    = fts_get_long_arg(at, ac, 2, 0);
+	
+    if (!sigfiddle_doinit(x, npoints, npitch))
+    {
+    	post("fiddle~: initialization failed");
+    	return;
+    }
+    hop = npoints>>1;
+    if (fts_fft_declaresize(hop) != fts_Success)
+		post("fiddle~: bad FFT size");
+	
+    fts_alarm_init(&(x->x_clock), 0, sigfiddle_tick, x);
+    dsp_list_insert(o);
+}
+
+static fts_status_t sigfiddle_instantiate(fts_class_t *cl, int ac, const fts_atom_t *at)
+{
+	int i;
+	fts_atom_type_t a[5];
+	
+	fts_class_init(cl, sizeof(t_sigfiddle), 1, 6, 0);  /* 1 inlet + 6 outlets */
+	
+	/* the system methods */
+	
+	a[0] = fts_Symbol;
+	a[1] = fts_Long | fts_OptArg;
+	a[2] = fts_Long | fts_OptArg;
+	fts_method_define(cl, fts_SystemInlet, fts_s_init, sigfiddle_init, 3, a);
+	
+	fts_method_define(cl, fts_SystemInlet, fts_s_delete, sigfiddle_delete, 0, a);
+	a[0] = fts_Object;
+	fts_method_define(cl, fts_SystemInlet, fts_s_put, sigfiddle_put, 1, a);
+	
+	/* class' own methods */
+	fts_method_define(cl, 0, fts_new_symbol("print"), sigfiddle_print, 0, a);
+	fts_method_define(cl, 0, fts_new_symbol("debug"), sigfiddle_debug, 0, a);
+	fts_method_define(cl, 0, fts_new_symbol("amp-range"), sigfiddle_amprange13,
+					  0, a);
+	fts_method_define(cl, 0, fts_new_symbol("reattack"), sigfiddle_reattack13,
+					  0, a);
+	fts_method_define(cl, 0, fts_new_symbol("vibrato"), sigfiddle_vibrato13,
+					  0, a);
+	fts_method_define(cl, 0, fts_new_symbol("npartial"), sigfiddle_npartial13,
+					  0, a);
+	
+	/* classes signal inlets */
+	dsp_sig_inlet(cl, 0);                    /* declare signal input #0 */
+	
+	/* classes outlets */
+	a[0] = fts_Float;
+	fts_outlet_type_define(cl, OUTLETpitch, fts_s_float, 1, a); /* declare outlet #0 */
+	fts_outlet_type_define(cl, OUTLETattack, fts_s_bang, 0, a); /* declare outlet #1 */
+	a[0] = fts_VarArgs;
+	fts_outlet_type_define(cl, OUTLETmicropitch1, fts_s_list, 1, a); /* declare outlet #2 */
+	fts_outlet_type_define(cl, OUTLETmicropitch2, fts_s_list, 1, a); /* declare outlet #3 */
+	fts_outlet_type_define(cl, OUTLETmicropitch3, fts_s_list, 1, a); /* declare outlet #4 */
+	a[0] = fts_Float;
+	fts_outlet_type_define(cl, OUTLETpower, fts_s_float, 1, a); /* declare outlet #5 */
+	
+	dsp_symbol = fts_new_symbol("fiddle");
+	dsp_declare_function(dsp_symbol, ftl_sigfiddle);
+	
+	/* DSP properties  */
+	
+	fts_class_put_prop(cl, fts_s_dsp_is_sink, fts_true);
+	
+	return(fts_Success);
+}
+
+void fiddle_config(void)
+{
+	sys_log(fiddle_version);
+	fts_metaclass_create(fts_new_symbol(CLASSNAME), sigfiddle_instantiate, fts_always_equiv);
+}
+
+fts_module_t fiddle_module =
+{"fiddle", "sonic meat fiddle", fiddle_config, 0};
+
+#endif	/* FTS1X */
+
+#ifdef PD
+
+static t_int *fiddle_perform(t_int *w)
+{
+    t_float *in = (t_float *)(w[1]);
+    t_sigfiddle *x = (t_sigfiddle *)(w[2]);
+    int n = (int)(w[3]);
+    int count;
+    float *fp;
+    for (count = 0, fp = x->x_inbuf + x->x_phase; count < n; count++)
+    	*fp++ = *in++;
+    if (fp == x->x_inbuf + x->x_hop)
+    {
+		sigfiddle_doit(x);
+		x->x_phase = 0;
+		if (x->x_auto) clock_delay(x->x_clock, 0L);
+		if (x->x_nprint) x->x_nprint--;
+    }
+    else x->x_phase += n;
+    return (w+4);
+}
+
+void sigfiddle_dsp(t_sigfiddle *x, t_signal **sp)
+{
+    x->x_sr = sp[0]->s_sr;
+    sigfiddle_reattack(x, x->x_attacktime, x->x_attackthresh);
+    sigfiddle_vibrato(x, x->x_vibtime, x->x_vibdepth);
+    dsp_add(fiddle_perform, 3, sp[0]->s_vec, x, sp[0]->s_n);
+}
+
+/* This is the callback function for the clock, but also acts as
+ the "bang" method; you can leave "auto" on to get this called
+ automatically (the default) or turn auto off and bang it yourself. */
+
+void sigfiddle_bang(t_sigfiddle *x)
+{
+    int i;
+    t_pitchhist *ph;
+    if (x->x_npeakout)
+    {
+    	int npeakout = x->x_npeakout;
+    	t_peakout *po;
+    	for (i = 0, po = x->x_peakbuf; i < npeakout; i++, po++)
+    	{
+			t_atom at[3];
+			SETFLOAT(at, i+1);
+			SETFLOAT(at+1, po->po_freq);
+			SETFLOAT(at+2, po->po_amp);
+			outlet_list(x->x_peakout, 0, 3, at);
+		}
+    }
+    outlet_float(x->x_envout, x->x_dbs[x->x_histphase]);
+    for (i = 0,  ph = x->x_hist; i < x->x_npitch; i++,  ph++)
+    {
+		t_atom at[2];
+		SETFLOAT(at, ph->h_pitches[x->x_histphase]);
+		SETFLOAT(at+1, ph->h_amps[x->x_histphase]);
+		outlet_list(ph->h_outlet, 0, 2, at);
+    }
+    if (x->x_attackvalue) outlet_bang(x->x_attackout);
+    for (i = 0,  ph = x->x_hist; i < x->x_npitch; i++,  ph++)
+		if (ph->h_pitch) outlet_float(x->x_noteout, ph->h_pitch);
+}
+
+void sigfiddle_ff(t_sigfiddle *x)		/* cleanup on free */
+{
+    if (x->x_inbuf)
+    {
+    	freebytes(x->x_inbuf, sizeof(float) * x->x_hop);
+    	freebytes(x->x_lastanalysis, sizeof(float) * (2*x->x_hop + 4 * FILTSIZE));
+    	freebytes(x->x_spiral, sizeof(float) * 2*x->x_hop);
+    	freebytes(x->x_peakbuf, sizeof(*x->x_peakbuf) * x->x_npeakout);
+    	clock_free(x->x_clock);
+    }
+}
+
+static t_class *sigfiddle_class;
+
+void *sigfiddle_new(t_floatarg npoints, t_floatarg npitch,
+					t_floatarg fnpeakanal, t_floatarg fnpeakout)
+{
+    t_sigfiddle *x = (t_sigfiddle *)pd_new(sigfiddle_class);
+    int i;
+    int npeakanal = fnpeakanal, npeakout = fnpeakout;
+	
+	
+    if (!sigfiddle_doinit(x, npoints, npitch,
+						  npeakanal, npeakout))
+    {
+    	x->x_inbuf = 0;     /* prevent the free routine from cleaning up */
+    	pd_free(&x->x_ob.ob_pd);
+    	return (0);
+    }
+    x->x_noteout = outlet_new(&x->x_ob, gensym("float"));
+    x->x_attackout = outlet_new(&x->x_ob, gensym("bang"));
+    for (i = 0; i < x->x_npitch; i++)
+		x->x_hist[i].h_outlet = outlet_new(&x->x_ob, gensym("list"));
+    x->x_envout = outlet_new(&x->x_ob, gensym("float"));
+    if (x->x_npeakout)
+    	x->x_peakout = outlet_new(&x->x_ob, gensym("list"));
+    else x->x_peakout = 0;
+    x->x_clock = clock_new(&x->x_ob.ob_pd, (t_method)sigfiddle_bang);
+    return (x);
+}
+
+void fiddle_tilde_setup(void)
+{
+    sigfiddle_class = class_new(gensym("fiddle~"), (t_newmethod)sigfiddle_new,
+								(t_method)sigfiddle_ff, sizeof(t_sigfiddle), 0,
+								A_DEFFLOAT, A_DEFFLOAT, A_DEFFLOAT, A_DEFFLOAT, 0);
+    class_addmethod(sigfiddle_class, (t_method)sigfiddle_dsp,
+					gensym("dsp"), 0);
+    class_addmethod(sigfiddle_class, (t_method)sigfiddle_debug,
+					gensym("debug"), 0);
+    class_addmethod(sigfiddle_class, (t_method)sigfiddle_amprange,
+					gensym("amp-range"), A_FLOAT, A_FLOAT, 0);
+    class_addmethod(sigfiddle_class, (t_method)sigfiddle_reattack,
+					gensym("reattack"), A_FLOAT, A_FLOAT, 0);
+    class_addmethod(sigfiddle_class, (t_method)sigfiddle_vibrato,
+					gensym("vibrato"), A_FLOAT, A_FLOAT, 0);
+    class_addmethod(sigfiddle_class, (t_method)sigfiddle_npartial,
+					gensym("npartial"), A_FLOAT, 0);
+    class_addmethod(sigfiddle_class, (t_method)sigfiddle_auto,
+					gensym("auto"), A_FLOAT, 0);
+    class_addmethod(sigfiddle_class, (t_method)sigfiddle_print,
+					gensym("print"), 0);
+    class_addmethod(sigfiddle_class, nullfn, gensym("signal"), 0);
+    class_addbang(sigfiddle_class, sigfiddle_bang);
+    class_addcreator((t_newmethod)sigfiddle_new, gensym("fiddle"),
+					 A_DEFFLOAT, A_DEFFLOAT, A_DEFFLOAT, A_DEFFLOAT, 0);
+    post(fiddle_version);
+}
+
+void fiddle_setup(void)
+{
+    fiddle_tilde_setup();
+}
+#endif /* PD */
+
+#ifdef MAX26
+
+void cu_fiddle(float *in1, t_sigfiddle *x, int n)
+{
+    int count;
+    float *fp,  *fp2;
+    for (count = 0, fp = x->x_inbuf + x->x_phase;
+		 count < n; count++) *fp++ = *in1++;
+    if (fp == x->x_inbuf + x->x_hop)
+    {
+		sigfiddle_doit(x);
+		x->x_phase = 0;
+		if (x->x_auto) clock_delay(x->x_clock, 0L);
+		if (x->x_nprint) x->x_nprint--;
+    }
+    else x->x_phase += n;
+}
+
+void sigfiddle_put(t_sigfiddle *x, long whether)
+{
+    if (whether)
+    {
+		u_stdout(x);
+		x->x_sr = x->x_io[0]->s_sr;
+		sigfiddle_reattack(x, x->x_attacktime, x->x_attackthresh);
+		sigfiddle_vibrato(x, x->x_vibtime, x->x_vibdepth);
+		dspchain_addc(cu_fiddle, 3,
+					  x->x_io[0]->s_shit, x, x->x_io[0]->s_n);
+    }
+}
+
+void sigfiddle_tick(t_sigfiddle *x)	/* callback function for the clock */
+{
+    int i;
+    t_pitchhist *ph;
+    outlet_float(x->x_envout, x->x_dbs[x->x_histphase]);
+    for (i = 0,  ph = x->x_hist; i < x->x_npitch; i++,  ph++)
+    {
+		t_atom at[2];
+		SETFLOAT(at, ph->h_pitches[x->x_histphase]);
+		SETFLOAT(at+1, ph->h_amps[x->x_histphase]);
+		outlet_list(ph->h_outlet, NIL, 2, at);
+    }
+    if (x->x_attackvalue) outlet_bang(x->x_attackout);
+    for (i = 0,  ph = x->x_hist; i < x->x_npitch; i++,  ph++)
+		if (ph->h_pitch) outlet_float(x->x_noteout, ph->h_pitch);
+}
+
+void sigfiddle_ff(t_sigfiddle *x)		/* cleanup on free */
+{
+    if (x->x_inbuf)
+    {
+    	freebytes(x->x_inbuf, sizeof(float) * x->x_hop);
+    	freebytes(x->x_lastanalysis, sizeof(float) * (2*x->x_hop + 4 * FILTSIZE));
+    	freebytes(x->x_spiral, sizeof(float) * 2*x->x_hop);
+    	clock_free(x->x_clock);
+    	u_clean(x);
+    }
+}
+
+t_externclass *sigfiddle_class;
+
+void *sigfiddle_new(long npoints, long npitch,
+					long npeakanal, long npeakout)
+{
+    t_sigfiddle *x = (t_sigfiddle *)obj_new(&sigfiddle_class, 0);
+    int i;
+	
+    if (!sigfiddle_doinit(x, npoints, npitch, npeakanal, npeakout))
+    {
+    	x->x_inbuf = 0;     /* prevent the free routine from cleaning up */
+    	obj_free(x);
+    	return (0);
+    }
+    u_setup(x, IN1, OUT0);
+    x->x_envout = outlet_new(x, gensym("float"));
+    for (i = 0; i < x->x_npitch; i++)
+		x->x_hist[i].h_outlet = outlet_new(x, gensym("list"));
+    x->x_attackout = outlet_new(x, gensym("bang"));
+    x->x_noteout = outlet_new(x, gensym("float"));
+    x->x_clock = clock_new(x, sigfiddle_tick);
+    return (x);
+}
+
+void fiddle_setup()
+{
+    c_extern(&sigfiddle_class, sigfiddle_new, sigfiddle_ff,
+			 gensym("fiddle"), sizeof(t_sigfiddle), 0, A_DEFLONG, A_DEFLONG,
+			 A_DEFLONG, A_DEFLONG, 0);
+    c_addmess(sigfiddle_put, gensym("put"), A_CANT, 0);
+    c_addmess(sigfiddle_debug, gensym("debug"), 0);
+    c_addmess(sigfiddle_amprange, gensym("amp-range"), A_FLOAT, A_FLOAT, 0);
+    c_addmess(sigfiddle_reattack, gensym("reattack"), A_FLOAT, A_FLOAT, 0);
+    c_addmess(sigfiddle_vibrato, gensym("vibrato"), A_LONG, A_FLOAT, 0);
+    c_addmess(sigfiddle_npartial, gensym("npartial"), A_FLOAT, 0);
+    c_addmess(sigfiddle_print, gensym("print"), 0);
+    u_inletmethod(0);	/* one signal input */
+#ifdef MAX
+    post(fiddle_version);
+#endif
+}
+
+#endif /* MAX26 */
+
+#pragma mark MaxMSP Code ----------------------------
 
 #ifdef MSP
-
-static	void *sigfiddle_class;
 
 static t_int *fiddle_perform(t_int *w)
 {
@@ -1149,7 +1636,6 @@ void fiddle_perform64(t_sigfiddle *x, t_object *dsp64, double **ins, long numins
     else x->x_phase += n;
 
 }
-
 
 
 void sigfiddle_dsp(t_sigfiddle *x, t_signal **sp)
@@ -1268,7 +1754,7 @@ void sigfiddle_ff(t_sigfiddle *x)		/* cleanup on free  MSP  */
     
 }
 
-
+static	void *sigfiddle_class;
 
 void *sigfiddle_new(long npoints, long npitch,	long npeakanal, long npeakout)
 {
@@ -1310,8 +1796,8 @@ void *sigfiddle_new(long npoints, long npitch,	long npeakanal, long npeakout)
 int C74_EXPORT main(void)
 {
 	t_class *c;
-	c = class_new("fiddle~", (method)sigfiddle_new,
-				  (method)sigfiddle_ff, sizeof(t_sigfiddle), 0L, A_DEFLONG, A_DEFLONG, A_DEFLONG, A_DEFLONG, 0);
+	c = class_new("fiddle~", (method)sigfiddle_new, (method)sigfiddle_ff, sizeof(t_sigfiddle),
+				  0L, A_DEFLONG, A_DEFLONG, A_DEFLONG, A_DEFLONG, 0);
 	
 	class_addmethod(c, (method)sigfiddle_dsp, "dsp", A_CANT, 0);
 	class_addmethod(c, (method)sigfiddle_dsp64, "dsp64", A_CANT, 0);
