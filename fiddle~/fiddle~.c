@@ -541,64 +541,64 @@ void sigfiddle_doit(t_sigfiddle *x)
     for (i = MINBIN, fp = spect1+4*MINBIN, pk1 = peaklist;
 	i < n-2 && npeak < npeaktot; i++, fp += 4)
     {
-	float height = fp[2], h1 = fp[-2], h2 = fp[6];
-	float totalfreq, pfreq, f1, f2, m, var, stdev;
-	
-	if (height < h1 || height < h2 ||
-	    h1 < 0.00001f*total_power || h2 < 0.00001f*total_power)
-	    	continue;
+		float height = fp[2], h1 = fp[-2], h2 = fp[6];
+		float totalfreq, pfreq, f1, f2, m, var, stdev;
+		
+		if (height < h1 || height < h2 ||
+			h1 < 0.00001f*total_power || h2 < 0.00001f*total_power)
+				continue;
 
-    	    /* use an informal phase vocoder to estimate the frequency.
-    	    Do this for the two adjacent bins too. */
-	pfreq= ((fp[-8] - fp[8]) * (2.0f * fp[0] - fp[8] - fp[-8]) +
-		(fp[-7] - fp[9]) * (2.0f * fp[1] - fp[9] - fp[-7])) /
-		    (2.0f * height);
-	f1=    ((fp[-12] - fp[4]) * (2.0f * fp[-4] - fp[4] - fp[-12]) +
-		(fp[-11] - fp[5]) * (2.0f * fp[-3] - fp[5] - fp[-11])) /
-		    (2.0f * h1) - 1;
-	f2=    ((fp[-4] - fp[12]) * (2.0f * fp[4] - fp[12] - fp[-4]) +
-		(fp[-3] - fp[13]) * (2.0f * fp[5] - fp[13] - fp[-3])) /
-		    (2.0f * h2) + 1;
+				/* use an informal phase vocoder to estimate the frequency.
+				Do this for the two adjacent bins too. */
+		pfreq= ((fp[-8] - fp[8]) * (2.0f * fp[0] - fp[8] - fp[-8]) +
+			(fp[-7] - fp[9]) * (2.0f * fp[1] - fp[9] - fp[-7])) /
+				(2.0f * height);
+		f1=    ((fp[-12] - fp[4]) * (2.0f * fp[-4] - fp[4] - fp[-12]) +
+			(fp[-11] - fp[5]) * (2.0f * fp[-3] - fp[5] - fp[-11])) /
+				(2.0f * h1) - 1;
+		f2=    ((fp[-4] - fp[12]) * (2.0f * fp[4] - fp[12] - fp[-4]) +
+			(fp[-3] - fp[13]) * (2.0f * fp[5] - fp[13] - fp[-3])) /
+				(2.0f * h2) + 1;
 
-    	    /* get sample mean and variance of the three */
-	m = 0.333333f * (pfreq + f1 + f2);
-	var = 0.5f * ((pfreq-m)*(pfreq-m) + (f1-m)*(f1-m) + (f2-m)*(f2-m));
+				/* get sample mean and variance of the three */
+		m = 0.333333f * (pfreq + f1 + f2);
+		var = 0.5f * ((pfreq-m)*(pfreq-m) + (f1-m)*(f1-m) + (f2-m)*(f2-m));
 
-	totalfreq = i + m;
-	if (var * total_power > KNOCKTHRESH * height || var < 1e-30)
-	{
-#if 0
-	    if (x->x_nprint)
-		post("cancel: %.2f hz, index %.1f, power %.5f, stdev=%.2f",
-		    totalfreq * hzperbin, BPERO_OVER_LOG2 * log(totalfreq) - 96,
-		     height, sqrt(var));
-#endif
-	    continue;
-	}
-	stdev = fsqrt(var);
-	if (totalfreq < 4)
-	{
-	    if (x->x_nprint) post("oops: was %d,  freq %f, m %f, stdev %f h %f",
-		i,  totalfreq, m, stdev, height);
-	    totalfreq = 4;
-	}
-	pk1->p_width = stdev;
+		totalfreq = i + m;
+		if (var * total_power > KNOCKTHRESH * height || var < 1e-30)
+		{
+	#if 0
+			if (x->x_nprint)
+			post("cancel: %.2f hz, index %.1f, power %.5f, stdev=%.2f",
+				totalfreq * hzperbin, BPERO_OVER_LOG2 * log(totalfreq) - 96,
+				 height, sqrt(var));
+	#endif
+			continue;
+		}
+		stdev = fsqrt(var);
+		if (totalfreq < 4)
+		{
+			if (x->x_nprint) post("oops: was %d,  freq %f, m %f, stdev %f h %f",
+			i,  totalfreq, m, stdev, height);
+			totalfreq = 4;
+		}
+		pk1->p_width = stdev;
 
-	pk1->p_pow = height;
-	pk1->p_loudness = fsqrt(fsqrt(height));
-	pk1->p_fp = fp;
-	pk1->p_freq = totalfreq;
-	npeak++;
-#if 1
-	if (x->x_nprint)
-	{
-	    post("peak: %.2f hz. index %.1f, power %.5f, stdev=%.2f",
-		pk1->p_freq * hzperbin,
-		BPERO_OVER_LOG2 * log(pk1->p_freq) - 96,
-		 height, stdev);
-	}
-#endif
-	pk1++;
+		pk1->p_pow = height;
+		pk1->p_loudness = fsqrt(fsqrt(height));
+		pk1->p_fp = fp;
+		pk1->p_freq = totalfreq;
+		npeak++;
+	#if 1
+		if (x->x_nprint)
+		{
+			post("peak: %.2f hz. index %.1f, power %.5f, stdev=%.2f",
+			pk1->p_freq * hzperbin,
+			BPERO_OVER_LOG2 * log(pk1->p_freq) - 96,
+			 height, stdev);
+		}
+	#endif
+		pk1++;
     }
 
     	    /* prepare the raw peaks for output */
@@ -1042,7 +1042,7 @@ int sigfiddle_doinit(t_sigfiddle *x, long npoints, long npitch,
     long npeakanal, long npeakout)
 {
     float *buf1, *buf2,  *buf3;
-    t_peakout *buf4;
+    t_peakout *buf4 = NULL;
     int i, hop;
 
     if (npoints < MINPOINTS || npoints > MAXPOINTS) npoints = DEFAULTPOINTS;
@@ -1057,40 +1057,44 @@ int sigfiddle_doinit(t_sigfiddle *x, long npoints, long npitch,
     else if (npitch > MAXNPITCH) npitch = MAXNPITCH;
     if (npeakanal && !npitch) npitch = 1;
 
+	//post("npoints %ld -- npitch %ld -- npeakanal %ld -- npeakout %ld", npoints, npitch, npeakanal, npeakout);
 
     if (!(buf1 = (float *)getbytes(sizeof(float) * hop)))
     {
-	error("fiddle~: out of memory");
-	return (0);
+		error("fiddle~: out of memory");
+		return (0);
     }
     if (!(buf2 = (float *)getbytes(sizeof(float) * (npoints + 4 * FILTSIZE))))
     {
-	freebytes(buf1, sizeof(float) * hop);
-	error("fiddle~: out of memory");
-	return (0);
+		freebytes(buf1, sizeof(float) * hop);
+		error("fiddle~: out of memory");
+		return (0);
     }
     if (!(buf3 = (float *)getbytes(sizeof(float) * npoints)))
     {
-	freebytes(buf1, sizeof(float) * hop);
-	freebytes(buf2, sizeof(float) * (npoints + 4 * FILTSIZE));
-	error("fiddle~: out of memory");
-	return (0);
+		freebytes(buf1, sizeof(float) * hop);
+		freebytes(buf2, sizeof(float) * (npoints + 4 * FILTSIZE));
+		error("fiddle~: out of memory");
+		return (0);
     }
-    if (!(buf4 = (t_peakout *)getbytes(sizeof(*buf4) * npeakout)))
-    {
-	freebytes(buf1, sizeof(float) * hop);
-	freebytes(buf2, sizeof(float) * (npoints + 4 * FILTSIZE));
-	freebytes(buf3, sizeof(float) * npoints);
-	error("fiddle~: out of memory");
-	return (0);
-    }
+	
+	if(npeakout>0) { // if npeakout is 0, initialization fails!
+		if (!(buf4 = (t_peakout *)getbytes(sizeof(*buf4) * npeakout)))
+		{
+			freebytes(buf1, sizeof(float) * hop);
+			freebytes(buf2, sizeof(float) * (npoints + 4 * FILTSIZE));
+			freebytes(buf3, sizeof(float) * npoints);
+			error("fiddle~: out of memory");
+			return (0);
+		}
+	}
     for (i = 0; i < hop; i++) buf1[i] = 0;
     for (i = 0; i < npoints + 4 * FILTSIZE; i++) buf2[i] = 0;
     for (i = 0; i < hop; i++)
 	buf3[2*i] =    cos((3.14159*i)/(npoints)),
 	buf3[2*i+1] = -sin((3.14159*i)/(npoints));
     for (i = 0; i < npeakout; i++)
-	buf4[i].po_freq = buf4[i].po_amp = 0;
+		buf4[i].po_freq = buf4[i].po_amp = 0;
     x->x_inbuf = buf1;
     x->x_lastanalysis = buf2;
     x->x_spiral = buf3;
@@ -1104,18 +1108,19 @@ int sigfiddle_doinit(t_sigfiddle *x, long npoints, long npitch,
     x->x_sr = 44100;		/* this and the next are filled in later */
     for (i = 0; i < MAXNPITCH; i++)
     {
-	int j;
-	x->x_hist[i].h_pitch = x->x_hist[i].h_noted = 0;
-	x->x_hist[i].h_age = 0;
-	x->x_hist[i].h_wherefrom = 0;
-	x->x_hist[i].h_outlet = 0;
-	for (j = 0; j < HISTORY; j++)
-	    x->x_hist[i].h_amps[j] = x->x_hist[i].h_pitches[j] = 0;
+		int j;
+		x->x_hist[i].h_pitch = x->x_hist[i].h_noted = 0;
+		x->x_hist[i].h_age = 0;
+		x->x_hist[i].h_wherefrom = 0;
+		x->x_hist[i].h_outlet = 0;
+		for (j = 0; j < HISTORY; j++)
+			x->x_hist[i].h_amps[j] = x->x_hist[i].h_pitches[j] = 0;
     }
     x->x_nprint = 0;
     x->x_npitch = npitch;
-    for (i = 0; i < HISTORY; i++) x->x_dbs[i] = 0;
-    x->x_dbage = 0;
+    for (i = 0; i < HISTORY; i++)
+		x->x_dbs[i] = 0;
+	x->x_dbage = 0;
     x->x_peaked = 0;
     x->x_auto = 1;
     x->x_amplo = DEFAMPLO;
@@ -1134,6 +1139,7 @@ int sigfiddle_doinit(t_sigfiddle *x, long npoints, long npitch,
 /* formalities for FTS1.X */
 
 #ifdef FTS1X
+#pragma mark FTS code -----------------------------
 
 void sigfiddle_debug13(fts_object_t *o, int winlet, fts_symbol_t *s, int ac, const fts_atom_t *at)
 {
@@ -1339,6 +1345,7 @@ fts_module_t fiddle_module =
 #endif	/* FTS1X */
 
 #ifdef PD
+#pragma mark PD code --------------------------------
 
 static t_int *fiddle_perform(t_int *w)
 {
@@ -1478,6 +1485,7 @@ void fiddle_setup(void)
 #endif /* PD */
 
 #ifdef MAX26
+#pragma mark MAX26 code ----------------------------
 
 void cu_fiddle(float *in1, t_sigfiddle *x, int n)
 {
@@ -1747,11 +1755,14 @@ void sigfiddle_ff(t_sigfiddle *x)		/* cleanup on free  MSP  */
     	t_freebytes(x->x_inbuf, sizeof(float) * x->x_hop);
     	t_freebytes(x->x_lastanalysis, sizeof(float) * (2*x->x_hop + 4 * FILTSIZE));
     	t_freebytes(x->x_spiral, sizeof(float) * 2*x->x_hop);
-    	t_freebytes(x->x_peakbuf, sizeof(*x->x_peakbuf) * x->x_npeakout);
+    	//t_freebytes(x->x_peakbuf, sizeof(*x->x_peakbuf) * x->x_npeakout);
 		if(x->x_clock)
 			clock_free(x->x_clock);
     }
-    
+	
+	if(x->x_peakbuf)	 {	// this one could be zero
+		t_freebytes(x->x_peakbuf, sizeof(*x->x_peakbuf) * x->x_npeakout);
+	}
 }
 
 static	void *sigfiddle_class;
@@ -1769,6 +1780,7 @@ void *sigfiddle_new(long npoints, long npitch,	long npeakanal, long npeakout)
     
     if (!sigfiddle_doinit(x, npoints, npitch, npeakanal, npeakout))
     {
+		post("doinit failed!");
     	x->x_inbuf = 0;     /* prevent the free routine from cleaning up */
     	return (0);
     }

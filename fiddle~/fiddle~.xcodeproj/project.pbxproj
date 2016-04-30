@@ -174,7 +174,7 @@
 				COPY_PHASE_STRIP = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"$(SRCROOT)/../../c74support/msp-includes\"",
+					"\"$(C74SUPPORT)\"",
 				);
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INFOPLIST_FILE = "$(SRCROOT)/../Info.plist";
@@ -190,7 +190,7 @@
 				COPY_PHASE_STRIP = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"$(SRCROOT)/../../c74support/msp-includes\"",
+					"\"$(C74SUPPORT)\"",
 				);
 				INFOPLIST_FILE = "$(SRCROOT)/../Info.plist";
 				OTHER_LDFLAGS = "$(C74_SYM_LINKER_FLAGS)";
