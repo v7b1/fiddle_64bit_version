@@ -11,8 +11,8 @@ include_directories(
 add_library( 
 	${PROJECT_NAME} 
 	MODULE
-	${PROJECT_NAME}.cpp
-	d_fft_mayer.cpp
+	${PROJECT_NAME}.c
+	fft_mayer.c
 )
 
 
