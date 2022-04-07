@@ -1636,9 +1636,13 @@ void fiddle_perform64(t_sigfiddle *x, t_object *dsp64, double **ins, long numins
     }
     if (fp == x->x_inbuf + x->x_hop)
     {
-		sigfiddle_doit(x);
+		if (x->x_auto) {			// TODO: try something here that switches off analysis. How do we make single analysis possible?
+			sigfiddle_doit(x);
+			clock_delay(x->x_clock, 0L);
+		}
+		
 		x->x_phase = 0;
-		if (x->x_auto) clock_delay(x->x_clock, 0L);
+		
 		if (x->x_nprint) x->x_nprint--;
     }
     else x->x_phase += n;
