@@ -1,0 +1,24 @@
+{
+	"author" : "vboehm",
+	"description" : "A 64-bit version of the popular fiddle~ object by Miller Puckette",
+	"homepatcher" : "",
+	"max_version_min" : "8.1",
+	"name" : "fiddle_64bit-version",
+	"os" : {
+		"macintosh" : {
+			"platform" : [ "x64", "arm64" ],
+			"min_version" : "none"
+		},
+		"windows" : {
+			"platform" : [ "x64" ],
+			"min_version" : "none"
+		}
+	},
+	"package_extra" : { 
+		"reverse_domain" : "vboehm.net",
+		"copyright" : "Copyright (c) 2021 vboehm"
+	},
+	"tags" : [ ],
+	"version" : "@GIT_VERSION_MAJ@.@GIT_VERSION_MIN@.@GIT_VERSION_SUB@",
+	"website" : "http://www.github.com/v7b1"
+}
