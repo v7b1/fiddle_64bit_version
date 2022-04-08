@@ -1,6 +1,6 @@
 #define GOOD_TRIG
 // MSP removing this file cause I dont have it.
- #include "trigtbl.h"
+#include "trigtbl.h"
 char fht_version[] = "Brcwl-Hrtly-Ron-dbld";
 
 #include "fft_mayer.proto.h"
