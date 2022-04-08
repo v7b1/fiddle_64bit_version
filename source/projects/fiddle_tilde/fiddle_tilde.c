@@ -1139,7 +1139,7 @@ int sigfiddle_doinit(t_sigfiddle *x, long npoints, long npitch,
 /* formalities for FTS1.X */
 
 #ifdef FTS1X
-#pragma mark FTS code -----------------------------
+//#pragma mark FTS code -----------------------------
 
 void sigfiddle_debug13(fts_object_t *o, int winlet, fts_symbol_t *s, int ac, const fts_atom_t *at)
 {
@@ -1345,7 +1345,7 @@ fts_module_t fiddle_module =
 #endif	/* FTS1X */
 
 #ifdef PD
-#pragma mark PD code --------------------------------
+//#pragma mark PD code --------------------------------
 
 static t_int *fiddle_perform(t_int *w)
 {
@@ -1485,7 +1485,7 @@ void fiddle_setup(void)
 #endif /* PD */
 
 #ifdef MAX26
-#pragma mark MAX26 code ----------------------------
+//#pragma mark MAX26 code ----------------------------
 
 void cu_fiddle(float *in1, t_sigfiddle *x, int n)
 {
@@ -1589,7 +1589,7 @@ void fiddle_setup()
 
 #endif /* MAX26 */
 
-#pragma mark MaxMSP Code ----------------------------
+//#pragma mark MaxMSP Code ----------------------------
 
 #ifdef MSP
 
